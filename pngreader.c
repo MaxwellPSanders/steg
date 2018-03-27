@@ -12,6 +12,62 @@
 #include<string.h>
 #include<stdlib.h>
 
+//=============
+//this code taken from http://www.libpng.org/pub/png/spec/1.2/PNG-CRCAppendix.html
+//since I didn't want to write the crc algorithm
+
+   /* Table of CRCs of all 8-bit messages. */
+   unsigned long crc_table[256];
+   
+   /* Flag: has the table been computed? Initially false. */
+   int crc_table_computed = 0;
+   
+   /* Make the table for a fast CRC. */
+   void make_crc_table(void)
+   {
+     unsigned long c;
+     int n, k;
+   
+     for (n = 0; n < 256; n++) {
+       c = (unsigned long) n;
+       for (k = 0; k < 8; k++) {
+         if (c & 1)
+           c = 0xedb88320L ^ (c >> 1);
+         else
+           c = c >> 1;
+       }
+       crc_table[n] = c;
+     }
+     crc_table_computed = 1;
+   }
+   
+   /* Update a running CRC with the bytes buf[0..len-1]--the CRC
+      should be initialized to all 1's, and the transmitted value
+      is the 1's complement of the final running CRC (see the
+      crc() routine below)). */
+   
+   unsigned long update_crc(unsigned long crc, unsigned char *buf,
+                            int len)
+   {
+     unsigned long c = crc;
+     int n;
+   
+     if (!crc_table_computed)
+       make_crc_table();
+     for (n = 0; n < len; n++) {
+       c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
+     }
+     return c;
+   }
+   
+   /* Return the CRC of the bytes buf[0..len-1]. */
+   unsigned long crc(unsigned char *buf, int len)
+   {
+     return update_crc(0xffffffffL, buf, len) ^ 0xffffffffL;
+   }
+
+//==============
+
 //takes command line input
 int main(int argv, char* args[]){
 	//check if there is a filename
@@ -54,17 +110,25 @@ int main(int argv, char* args[]){
 			//display the length proudly
 			printf("Length of chunk: %d\n", length);
 			
-			//get the name of the chunk
-			fread(name, 1, 4, ifp);
-			printf("The name is %s\n\n", name);
+
+			//reallocate the space for the data		
+			data = realloc(data, length + 4);
 		
-			data = realloc(data, length);
+			//read the data
+			fread(data, 1, length + 4, ifp);
 			
-			//print that crap
+			//show the checksum
+			printf("The checksum equals %lx\n", crc(data, length + 4));
+
+			//get the name
+			strncpy(name,(char*)data,4);
+			printf("The name is %s\n\n", name);
+
+	
+			/*print that crap
 			for(i = 0; i < length; i++){
-				data[i] = fgetc(ifp);
-				//printf("0x%x\n", data[i]);
-			}
+				printf("0x%lx\n", data[i]);
+			}*/
 			
 			//skip the checksum
 			fseek(ifp, 4, SEEK_CUR);
